@@ -1,0 +1,6 @@
+*.app/
+AppIcon.iconset/
+icon_source.png
+__pycache__/
+*.pyc
+.DS_Store
