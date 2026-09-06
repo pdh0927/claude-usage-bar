@@ -147,18 +147,43 @@ final class StatusFileWatcher {
     deinit { stop() }
 }
 
+// MARK: - Display mode
+
+/// User-chosen menu bar presentation, persisted across launches.
+enum DisplayMode: String {
+    case icon   // dual-ring gauge (default)
+    case text   // "54%/29%", the original text-only presentation
+}
+
 // MARK: - App
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+    private static let displayModeDefaultsKey = "displayMode"
+
+    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let statusFilePath = NSHomeDirectory() + "/.claude/usage-status.json"
     private var watcher: StatusFileWatcher?
 
     private var sessionMenuItem: NSMenuItem!
     private var weekMenuItem: NSMenuItem!
     private var updatedMenuItem: NSMenuItem!
+    private var iconModeMenuItem: NSMenuItem!
+    private var textModeMenuItem: NSMenuItem!
+
+    // Defaults to .icon; overridden below if a valid choice was saved before.
+    private var displayMode: DisplayMode = .icon
+
+    // Last successfully parsed values, so switching modes redraws immediately
+    // without waiting for the next file change.
+    private var lastSession: Double?
+    private var lastWeek: Double?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let saved = UserDefaults.standard.string(forKey: Self.displayModeDefaultsKey),
+           let mode = DisplayMode(rawValue: saved) {
+            displayMode = mode
+        }
+
         let menu = NSMenu()
 
         sessionMenuItem = NSMenuItem(title: "세션(5시간): -", action: nil, keyEquivalent: "")
@@ -168,6 +193,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item?.isEnabled = false
             menu.addItem(item!)
         }
+
+        menu.addItem(NSMenuItem.separator())
+        iconModeMenuItem = NSMenuItem(title: "아이콘으로 보기", action: #selector(selectDisplayMode(_:)), keyEquivalent: "")
+        iconModeMenuItem.target = self
+        iconModeMenuItem.tag = 0
+        textModeMenuItem = NSMenuItem(title: "숫자로 보기", action: #selector(selectDisplayMode(_:)), keyEquivalent: "")
+        textModeMenuItem.target = self
+        textModeMenuItem.tag = 1
+        menu.addItem(iconModeMenuItem)
+        menu.addItem(textModeMenuItem)
+        updateModeMenuState()
 
         menu.addItem(NSMenuItem.separator())
         let refresh = NSMenuItem(title: "새로고침", action: #selector(refresh), keyEquivalent: "")
@@ -187,6 +223,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         reload()
     }
 
+    @objc private func selectDisplayMode(_ sender: NSMenuItem) {
+        let mode: DisplayMode = sender.tag == 0 ? .icon : .text
+        guard mode != displayMode else { return }
+        displayMode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: Self.displayModeDefaultsKey)
+        updateModeMenuState()
+        render()
+    }
+
+    private func updateModeMenuState() {
+        iconModeMenuItem.state = displayMode == .icon ? .on : .off
+        textModeMenuItem.state = displayMode == .text ? .on : .off
+    }
+
     private func reload() {
         // A missing file, unreadable JSON, or a Free-tier account (no rate_limits
         // block at all) are all treated the same: show "no data" rather than an
@@ -198,15 +248,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let session = status.five_hour,
             let week = status.seven_day
         else {
-            applyUnknown()
+            lastSession = nil
+            lastWeek = nil
+            updateDetails(session: nil, week: nil, updatedAt: nil)
+            render()
             return
         }
-        apply(session: session, week: week, updatedAt: status.updated_at)
+        lastSession = session
+        lastWeek = week
+        updateDetails(session: session, week: week, updatedAt: status.updated_at)
+        render()
     }
 
-    private func apply(session: Double, week: Double, updatedAt: Double?) {
-        statusItem.button?.image = IconFactory.dualRingIcon(session: session, week: week)
-
+    /// Tooltip and dropdown text always show real numbers, independent of display mode.
+    private func updateDetails(session: Double?, week: Double?, updatedAt: Double?) {
+        guard let session, let week else {
+            sessionMenuItem.title = "세션(5시간): -"
+            weekMenuItem.title = "주간(7일): -"
+            updatedMenuItem.title = "갱신: -"
+            statusItem.button?.toolTip = "사용량 정보 없음 (Pro/Max 구독 및 statusline 설정을 확인하세요)"
+            return
+        }
         let sessionText = String(format: "세션(5시간): %.0f%%", session)
         let weekText = String(format: "주간(7일): %.0f%%", week)
         sessionMenuItem.title = sessionText
@@ -215,12 +277,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.toolTip = "\(sessionText)\n\(weekText)"
     }
 
-    private func applyUnknown() {
-        statusItem.button?.image = IconFactory.unknownIcon()
-        sessionMenuItem.title = "세션(5시간): -"
-        weekMenuItem.title = "주간(7일): -"
-        updatedMenuItem.title = "갱신: -"
-        statusItem.button?.toolTip = "사용량 정보 없음 (Pro/Max 구독 및 statusline 설정을 확인하세요)"
+    /// Draws the button from lastSession/lastWeek according to the current mode.
+    private func render() {
+        guard let session = lastSession, let week = lastWeek else {
+            switch displayMode {
+            case .icon:
+                statusItem.button?.image = IconFactory.unknownIcon()
+                statusItem.button?.title = ""
+            case .text:
+                statusItem.button?.image = nil
+                statusItem.button?.title = "Claude: -"
+            }
+            return
+        }
+        switch displayMode {
+        case .icon:
+            statusItem.button?.image = IconFactory.dualRingIcon(session: session, week: week)
+            statusItem.button?.title = ""
+        case .text:
+            statusItem.button?.image = nil
+            statusItem.button?.title = String(format: "%.0f%%/%.0f%%", session, week)
+        }
     }
 
     private func formattedTime(_ epochSeconds: Double?) -> String {

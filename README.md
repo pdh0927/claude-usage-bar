@@ -82,6 +82,14 @@ Then remove the snippet block (between the `# >>> claude-usage-bar` /
 `# <<< claude-usage-bar` markers) from `~/.claude/statusline.sh`, and delete
 `~/.claude/usage-status.json` if you want.
 
+## Display mode
+
+The dropdown menu has two mutually-exclusive checkable items, "아이콘으로 보기"
+(icon) and "숫자로 보기" (text, e.g. `54%/29%` -- the original prototype's
+presentation). The choice is saved (`UserDefaults`) and restored on next
+launch; default is icon. Both modes redraw from the same file-watch, so
+switching is instant and neither mode is ever stale relative to the other.
+
 ## Design notes
 
 **Icon: dual concentric ring, in color.** The outer ring is 7-day usage, the
