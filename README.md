@@ -1,75 +1,84 @@
 # claude-usage-bar
 
-A macOS menu bar app that shows your Claude Code rate-limit usage (session and
-weekly) as a small dual-ring gauge, read from a JSON snapshot that a one-line
-addition to your `statusline.sh` writes out.
+A little macOS menu bar app that shows your Claude Code usage limits — current
+session and weekly — as a small ring gauge, so you don't have to guess when
+you're about to get rate-limited.
 
-**Not an official Anthropic product.** This is an independent, unofficial
-tool with no affiliation to or endorsement by Anthropic. "Claude" and
-"Claude Code" are Anthropic's names for their own products, referenced here
-only to describe what this tool reads data from.
+I made this because I kept losing track of how close I was to my 5-hour
+window resetting mid-task. It reads a JSON snapshot that a one-line addition
+to your `statusline.sh` writes out every time Claude Code runs.
 
-**Requires a Claude Code Pro or Max subscription.** The rate-limit fields this
-app reads (`rate_limits.five_hour.used_percentage` and
-`rate_limits.seven_day.used_percentage`) are only included in the statusLine
-hook JSON for Pro/Max accounts, and only after Claude Code's first response in
-a session. On other plans, or before that first response, the app shows a
-"no data" icon -- there's nothing wrong, the data just isn't available yet.
-See Anthropic's [statusline docs](https://code.claude.com/docs/en/statusline.md)
-("Rate limit usage" section).
+**Not an official Anthropic product.** Just a side project. No affiliation
+with or endorsement from Anthropic — "Claude" and "Claude Code" are their
+names, mentioned here only because that's what this thing reads data from.
+
+**You need a Claude Code Pro or Max subscription for this to show anything.**
+The fields it reads (`rate_limits.five_hour.used_percentage` and
+`rate_limits.seven_day.used_percentage`) only show up in the statusLine hook
+JSON for Pro/Max accounts, and only after Claude Code's first response in a
+session. If you're on another plan, or haven't sent a message yet, you'll
+just see a "no data" icon — that's expected, not broken. Anthropic's own docs
+cover this under "Rate limit usage": https://code.claude.com/docs/en/statusline.md
 
 ## How it works
 
-1. Claude Code calls your `~/.claude/statusline.sh` on every prompt render,
-   piping it a JSON blob that (for Pro/Max accounts) includes current
-   rate-limit usage.
-2. A one-line addition to that script extracts the two percentages and writes
-   them to `~/.claude/usage-status.json`, atomically (write to a temp file,
-   then `mv`), so the file is never read half-written.
-3. This app watches that file and redraws its menu bar icon whenever it
-   changes -- no polling.
+Claude Code calls `~/.claude/statusline.sh` every time it renders a prompt,
+and pipes it a JSON blob that includes your current rate-limit usage (if
+you're Pro/Max). A one-line addition to that script grabs the two
+percentages and writes them to `~/.claude/usage-status.json` — atomically
+(temp file, then `mv`), so the app never catches it half-written.
+
+The app itself just watches that file and redraws the icon whenever it
+changes. No polling, no timers ticking in the background for no reason.
 
 ## Install
 
 ```sh
 git clone <this-repo> claude-usage-bar
 cd claude-usage-bar
-./install.sh   # wires up ~/.claude/statusline.sh and ~/.claude/settings.json
-./build.sh     # builds ClaudeUsage.app
-open ClaudeUsage.app
+./setup.sh
 ```
 
-`install.sh` is idempotent and safe to re-run:
-- If you have no `~/.claude/statusline.sh` yet, it creates a minimal one.
-- If you already have a custom one, it appends the one-line snippet (see
-  `statusline-snippet.sh`) instead of overwriting your script -- and only if
-  your script captures the hook JSON the standard way (`input=$(cat)`); if it
-  doesn't recognize your script's shape, it prints the snippet for you to add
-  by hand rather than guessing and risking breaking it.
-- If `~/.claude/settings.json` has no `statusLine` configured, it adds one
-  pointing at `~/.claude/statusline.sh`. If you already have a different
-  `statusLine` configured, it leaves your settings alone and tells you what to
-  do instead.
+That wires up your `statusline.sh` and `settings.json`, builds the app,
+drops it in `/Applications`, and opens it. One command. You'll probably hit
+a Gatekeeper warning on first launch — see below, it's a two-click fix.
 
-To install into `/Applications` and keep it updated:
+If you'd rather do it in pieces, `setup.sh` is just `install.sh` → `build.sh`
+→ a `ditto` install, run in order. Each one works fine on its own — useful
+if you're rebuilding after tweaking the Swift source and don't want to redo
+the statusline wiring every time.
+
+`install.sh` won't clobber anything you already have:
+- No `~/.claude/statusline.sh`? It creates a minimal one.
+- Already have one? It appends the snippet (see `statusline-snippet.sh`)
+  instead of overwriting it — but only if your script reads the hook JSON
+  the usual way (`input=$(cat)`). If it can't tell, it just prints the
+  snippet for you to paste in by hand rather than risk breaking your setup.
+- No `statusLine` in `settings.json`? It adds one. Already have a different
+  one configured? It leaves it alone and tells you what to do instead.
+
+If you want to install/reinstall into `/Applications` by hand (say, after
+running `./build.sh` on its own):
 
 ```sh
 pkill -f ClaudeUsage.app/Contents/MacOS/ClaudeUsage 2>/dev/null
 rm -r -f /Applications/ClaudeUsage.app
-ditto ClaudeUsage.app /Applications/ClaudeUsage.app   # not cp -R: see note below
+ditto ClaudeUsage.app /Applications/ClaudeUsage.app   # not cp -R, see below
 open /Applications/ClaudeUsage.app
 ```
 
-(`cp -R` nests the copy inside an existing destination directory instead of
-replacing it; `ditto` does the right thing either way.)
+Don't use `cp -R` here — if `/Applications/ClaudeUsage.app` already exists,
+it copies *into* it instead of replacing it, and you end up with a
+nested app bundle that never actually updates. Ask me how I know. `ditto`
+just does the right thing either way.
 
-### Gatekeeper warning on first launch
+### That Gatekeeper warning
 
-This app is signed locally (ad-hoc, or with a free Apple Development
-certificate if you have one in Xcode) but is not notarized by Apple, so
-macOS will refuse to open it with a plain double-click the first time.
-**Right-click (or Control-click) the app > Open > Open**, once. After that,
-macOS remembers your choice and launches it normally, including on login.
+The app is signed locally (ad-hoc, or with a free Apple Development cert if
+Xcode has one for you) but it's not notarized by Apple, so a plain
+double-click gets refused the first time. Right-click the app in
+`/Applications` → Open → Open, once. macOS remembers after that, and it'll
+launch normally from then on, login items included.
 
 ## Uninstall
 
@@ -78,56 +87,57 @@ pkill -f ClaudeUsage.app/Contents/MacOS/ClaudeUsage
 rm -r -f /Applications/ClaudeUsage.app
 ```
 
-Then remove the snippet block (between the `# >>> claude-usage-bar` /
-`# <<< claude-usage-bar` markers) from `~/.claude/statusline.sh`, and delete
-`~/.claude/usage-status.json` if you want.
+Then, if you want to fully clean up, delete the snippet block from
+`~/.claude/statusline.sh` (it's between `# >>> claude-usage-bar` and
+`# <<< claude-usage-bar`) and remove `~/.claude/usage-status.json`.
 
 ## Display mode
 
-The dropdown menu has two mutually-exclusive checkable items, "아이콘으로 보기"
-(icon) and "숫자로 보기" (text, e.g. `54%/29%` -- the original prototype's
-presentation). The choice is saved (`UserDefaults`) and restored on next
-launch; default is icon. Both modes redraw from the same file-watch, so
-switching is instant and neither mode is ever stale relative to the other.
+The dropdown has two options — "아이콘으로 보기" (icon) and "숫자로 보기"
+(plain text, like `54%/29%`, which is how the very first version of this
+looked). Whichever you pick gets saved and remembered next launch; icon is
+the default. Both read from the same file-watch, so switching between them
+is instant either way.
 
-## Design notes
+## Why it looks the way it does
 
-**Icon: dual concentric ring, in color.** The outer ring is 7-day usage, the
-inner ring is the current 5-hour session, each colored green/yellow/red at the
-same 70%/90% thresholds `statusline.sh` already uses for its context bar. A
-rendered contact sheet at real menu-bar size (20pt, 1x/2x, light/dark)
-confirmed the two rings stay visually distinct at that size. Color was chosen
-over a monochrome template icon because two independently-thresholded values
-need a stronger cue than grayscale tinting can give at 18-20pt; the tradeoff
-is that a colored icon doesn't get the automatic light/dark tint and
-selection-invert that template images get for free. Exact numbers are never
-just implied by the rings -- they're always in the tooltip and the dropdown
-menu. A missing/unreadable/stale status file shows a `questionmark.circle`
-icon instead of an empty ring, so "no data" is never mistaken for "0% used".
+The icon is two colored rings — outer for the current 5-hour session, inner
+for the 7-day window — each going green/yellow/red at the same 70%/90%
+thresholds the statusline's own context bar already uses. I checked a
+contact sheet of the icon at real menu-bar size (20pt, both scales, both
+light and dark mode) before committing to this, and the two rings stay
+readable even that small.
 
-**File watching, not polling.** The app watches `~/.claude` (the status
-file's parent directory, via `DispatchSource.makeFileSystemObjectSource`) for
-child changes, debounced 150ms, instead of polling on a timer. `mv`-based
-atomic replacement gives the file a new inode on every update, which would
-make a watch on the file's own descriptor go stale on every single write;
-watching the directory instead sidesteps that, since the directory's own
-inode never changes, so registration is one-time and effectively free while
-idle.
+I went with color instead of a plain monochrome template icon because two
+separately-thresholded numbers need more than grayscale to read at a glance
+at that size. The cost is that a colored icon doesn't get the automatic
+dark-mode tinting a template image gets for free — a fair trade here, I
+think. Either way, the exact numbers are never just implied by the rings;
+they're always spelled out in the tooltip and the dropdown. And if the
+status file is missing or unreadable, you get a `questionmark.circle` icon
+instead of an empty ring, so "no data" never looks like "0% used".
 
-## Security notes
+On the technical side: it watches `~/.claude` (the status file's parent
+directory) for changes instead of polling on a timer. The status file gets
+replaced atomically via `mv`, which means it gets a new inode every single
+update — watching the file directly would mean reopening the watch on every
+write. Watching the directory instead sidesteps all of that, since the
+directory's inode never changes. One-time setup, basically free while idle.
 
-- `statusline.sh` never interpolates the hook JSON into a shell command --
-  it's only ever piped into `jq` as data, so there's no shell-injection
-  surface from the JSON's contents.
-- The app reads a fixed path under your own home directory
-  (`~/.claude/usage-status.json`); malformed or missing JSON is treated the
-  same as "no data" (an icon, not a crash or a dialog) -- there's nothing
-  actionable a user could do about either case from this app, so that failure
-  mode is by design, not a swallowed error.
-- No personal paths, usernames, or team IDs are hardcoded anywhere in this
-  repo; codesigning uses whatever identity is available locally (falls back
-  to ad-hoc if no certificate is found -- see `build.sh`).
+## A note on security
+
+- `statusline.sh` never interpolates the hook JSON into a shell command —
+  it only ever gets piped into `jq` as data, so there's no injection path
+  through the JSON's contents.
+- The app just reads a fixed file under your own home directory. Bad or
+  missing JSON shows the same "no data" icon as anything else — there's
+  nothing you could actually do differently for a missing file vs. a
+  malformed one, so that's intentional, not a swallowed error.
+- Nothing personal — no usernames, paths, or team IDs — is hardcoded
+  anywhere in here. Codesigning just uses whatever identity happens to be
+  available on your machine, falling back to ad-hoc if there isn't one (see
+  `build.sh`).
 
 ## License
 
-MIT, see `LICENSE`.
+MIT — see `LICENSE`.

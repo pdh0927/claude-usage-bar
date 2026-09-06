@@ -8,7 +8,8 @@ import Cocoa
 struct UsageStatus: Codable {
     let five_hour: Double?
     let seven_day: Double?
-    let updated_at: Double?
+    let five_hour_resets_at: Double?
+    let seven_day_resets_at: Double?
 }
 
 // MARK: - Icon rendering
@@ -17,11 +18,11 @@ struct UsageStatus: Codable {
 /// regenerated on every data refresh instead of shipping static image assets.
 enum IconFactory {
     private static let canvas = NSSize(width: 20, height: 20)
-    private static let outerRadius: CGFloat = 8.4   // 7-day usage
-    private static let innerRadius: CGFloat = 4.6   // 5-hour session usage
+    private static let outerRadius: CGFloat = 8.4   // 5-hour session usage
+    private static let innerRadius: CGFloat = 4.6   // 7-day usage
     private static let lineWidth: CGFloat = 2.0
 
-    private static func color(for pct: Double) -> NSColor {
+    static func color(for pct: Double) -> NSColor {
         if pct >= 90 { return .systemRed }
         if pct >= 70 { return .systemYellow }
         return .systemGreen
@@ -42,7 +43,7 @@ enum IconFactory {
         return path
     }
 
-    /// Outer ring = weekly (7-day) usage, inner ring = current session (5-hour) usage.
+    /// Outer ring = current session (5-hour) usage, inner ring = weekly (7-day) usage.
     /// Colored (not template) so the green/yellow/red threshold is visible without
     /// reading numbers -- see README "Design notes" for the template-vs-color tradeoff.
     static func dualRingIcon(session: Double, week: Double) -> NSImage {
@@ -56,16 +57,16 @@ enum IconFactory {
                 track.stroke()
             }
 
-            let outer = progressPath(center: center, radius: outerRadius, pct: week)
+            let outer = progressPath(center: center, radius: outerRadius, pct: session)
             outer.lineWidth = lineWidth
             outer.lineCapStyle = .round
-            color(for: week).setStroke()
+            color(for: session).setStroke()
             outer.stroke()
 
-            let inner = progressPath(center: center, radius: innerRadius, pct: session)
+            let inner = progressPath(center: center, radius: innerRadius, pct: week)
             inner.lineWidth = lineWidth
             inner.lineCapStyle = .round
-            color(for: session).setStroke()
+            color(for: week).setStroke()
             inner.stroke()
 
             return true
@@ -155,6 +156,87 @@ enum DisplayMode: String {
     case text   // "54%/29%", the original text-only presentation
 }
 
+// MARK: - Dropdown row view
+
+/// A labeled progress bar + reset-time subtitle, used as a menu item's custom view
+/// in place of a plain text row -- so usage is scannable as a bar, not just a number.
+final class UsageRowView: NSView {
+    private let titleLabel = NSTextField(labelWithString: "")
+    private let percentLabel = NSTextField(labelWithString: "")
+    private let subtitleLabel = NSTextField(labelWithString: "")
+    private let track = NSView()
+    private let fill = NSView()
+    private var fillWidthConstraint: NSLayoutConstraint?
+
+    init(title: String) {
+        super.init(frame: NSRect(x: 0, y: 0, width: 260, height: 54))
+
+        titleLabel.stringValue = title
+        titleLabel.font = .systemFont(ofSize: 13, weight: .medium)
+
+        percentLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
+        percentLabel.alignment = .right
+
+        subtitleLabel.font = .systemFont(ofSize: 11)
+        subtitleLabel.textColor = .secondaryLabelColor
+
+        track.wantsLayer = true
+        track.layer?.backgroundColor = NSColor.tertiaryLabelColor.withAlphaComponent(0.3).cgColor
+        track.layer?.cornerRadius = 3
+        fill.wantsLayer = true
+        fill.layer?.cornerRadius = 3
+
+        for v in [titleLabel, percentLabel, subtitleLabel, track] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(v)
+        }
+        fill.translatesAutoresizingMaskIntoConstraints = false
+        track.addSubview(fill)
+
+        NSLayoutConstraint.activate([
+            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 7),
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+
+            percentLabel.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            percentLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            percentLabel.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 8),
+
+            track.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 6),
+            track.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            track.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            track.heightAnchor.constraint(equalToConstant: 6),
+
+            fill.leadingAnchor.constraint(equalTo: track.leadingAnchor),
+            fill.topAnchor.constraint(equalTo: track.topAnchor),
+            fill.bottomAnchor.constraint(equalTo: track.bottomAnchor),
+
+            subtitleLabel.topAnchor.constraint(equalTo: track.bottomAnchor, constant: 4),
+            subtitleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            subtitleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func update(percent: Double?, subtitle: String) {
+        fillWidthConstraint?.isActive = false
+        guard let percent else {
+            percentLabel.stringValue = "-"
+            fill.layer?.backgroundColor = NSColor.clear.cgColor
+            subtitleLabel.stringValue = subtitle
+            return
+        }
+        percentLabel.stringValue = String(format: "%.0f%%", percent)
+        fill.layer?.backgroundColor = IconFactory.color(for: percent).cgColor
+        subtitleLabel.stringValue = subtitle
+
+        let fraction = CGFloat(max(0, min(100, percent)) / 100)
+        let constraint = fill.widthAnchor.constraint(equalTo: track.widthAnchor, multiplier: fraction)
+        constraint.isActive = true
+        fillWidthConstraint = constraint
+    }
+}
+
 // MARK: - App
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -164,9 +246,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let statusFilePath = NSHomeDirectory() + "/.claude/usage-status.json"
     private var watcher: StatusFileWatcher?
 
-    private var sessionMenuItem: NSMenuItem!
-    private var weekMenuItem: NSMenuItem!
-    private var updatedMenuItem: NSMenuItem!
+    private var sessionRow: UsageRowView!
+    private var weekRow: UsageRowView!
     private var iconModeMenuItem: NSMenuItem!
     private var textModeMenuItem: NSMenuItem!
 
@@ -174,9 +255,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var displayMode: DisplayMode = .icon
 
     // Last successfully parsed values, so switching modes redraws immediately
-    // without waiting for the next file change.
+    // without waiting for the next file change, and so a field that's briefly
+    // absent from one snapshot (see reload()) still has something to fall back to.
     private var lastSession: Double?
     private var lastWeek: Double?
+    private var lastSessionResetsAt: Double?
+    private var lastWeekResetsAt: Double?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let saved = UserDefaults.standard.string(forKey: Self.displayModeDefaultsKey),
@@ -186,15 +270,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
 
-        sessionMenuItem = NSMenuItem(title: "세션(5시간): -", action: nil, keyEquivalent: "")
-        weekMenuItem = NSMenuItem(title: "주간(7일): -", action: nil, keyEquivalent: "")
-        updatedMenuItem = NSMenuItem(title: "갱신: -", action: nil, keyEquivalent: "")
-        for item in [sessionMenuItem, weekMenuItem, updatedMenuItem] {
-            item?.isEnabled = false
-            menu.addItem(item!)
-        }
+        // Labels ("현재 세션" / "주간 한도") and reset-time phrasing match Claude's own
+        // usage UI convention: relative countdown for the session, weekday+time for the week.
+        menu.addItem(Self.headerMenuItem("사용량"))
+
+        sessionRow = UsageRowView(title: "현재 세션")
+        let sessionItem = NSMenuItem()
+        sessionItem.view = sessionRow
+        menu.addItem(sessionItem)
+
+        weekRow = UsageRowView(title: "주간 한도")
+        let weekItem = NSMenuItem()
+        weekItem.view = weekRow
+        menu.addItem(weekItem)
 
         menu.addItem(NSMenuItem.separator())
+        menu.addItem(Self.headerMenuItem("표시 방식"))
         iconModeMenuItem = NSMenuItem(title: "아이콘으로 보기", action: #selector(selectDisplayMode(_:)), keyEquivalent: "")
         iconModeMenuItem.target = self
         iconModeMenuItem.tag = 0
@@ -223,6 +314,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         reload()
     }
 
+    /// Small caps-style section label; unclickable (nil action) like the info rows above.
+    private static func headerMenuItem(_ text: String) -> NSMenuItem {
+        let item = NSMenuItem(title: text, action: nil, keyEquivalent: "")
+        item.attributedTitle = NSAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ])
+        return item
+    }
+
     @objc private func selectDisplayMode(_ sender: NSMenuItem) {
         let mode: DisplayMode = sender.tag == 0 ? .icon : .text
         guard mode != displayMode else { return }
@@ -238,43 +339,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func reload() {
-        // A missing file, unreadable JSON, or a Free-tier account (no rate_limits
-        // block at all) are all treated the same: show "no data" rather than an
-        // error dialog -- there's nothing actionable for the user to do about any
-        // of them from this app.
+        // A missing file or unreadable JSON means we've never had anything to show --
+        // that's a hard "no data", distinct from the case below.
         guard
             let data = FileManager.default.contents(atPath: statusFilePath),
-            let status = try? JSONDecoder().decode(UsageStatus.self, from: data),
-            let session = status.five_hour,
-            let week = status.seven_day
+            let status = try? JSONDecoder().decode(UsageStatus.self, from: data)
         else {
             lastSession = nil
             lastWeek = nil
-            updateDetails(session: nil, week: nil, updatedAt: nil)
+            lastSessionResetsAt = nil
+            lastWeekResetsAt = nil
+            updateDetails(session: nil, week: nil, sessionResetsAt: nil, weekResetsAt: nil)
             render()
             return
         }
+
+        // Each field falls back to its last known value independently, rather than
+        // blanking the whole display, when only that one field is momentarily absent
+        // from this snapshot -- e.g. right as the 5-hour window resets, Claude Code's
+        // hook briefly omits rate_limits.five_hour while seven_day is still present.
+        // ponytail: no staleness expiry on the fallback, so a value that's genuinely
+        // gone for good (e.g. downgrading off Pro/Max) would keep showing its last
+        // number instead of "-"; add an age check here if that edge case matters.
+        let session = status.five_hour ?? lastSession
+        let week = status.seven_day ?? lastWeek
+        let sessionResetsAt = status.five_hour_resets_at ?? lastSessionResetsAt
+        let weekResetsAt = status.seven_day_resets_at ?? lastWeekResetsAt
+
+        guard let session, let week else {
+            // Never had a value for one of these at all -- genuinely no data,
+            // e.g. a Free-tier account with no rate_limits block ever sent.
+            updateDetails(session: nil, week: nil, sessionResetsAt: nil, weekResetsAt: nil)
+            render()
+            return
+        }
+
         lastSession = session
         lastWeek = week
-        updateDetails(session: session, week: week, updatedAt: status.updated_at)
+        lastSessionResetsAt = sessionResetsAt
+        lastWeekResetsAt = weekResetsAt
+        updateDetails(session: session, week: week, sessionResetsAt: sessionResetsAt, weekResetsAt: weekResetsAt)
         render()
     }
 
-    /// Tooltip and dropdown text always show real numbers, independent of display mode.
-    private func updateDetails(session: Double?, week: Double?, updatedAt: Double?) {
+    /// Tooltip and dropdown rows always show real numbers, independent of display mode.
+    private func updateDetails(session: Double?, week: Double?, sessionResetsAt: Double?, weekResetsAt: Double?) {
         guard let session, let week else {
-            sessionMenuItem.title = "세션(5시간): -"
-            weekMenuItem.title = "주간(7일): -"
-            updatedMenuItem.title = "갱신: -"
+            sessionRow.update(percent: nil, subtitle: "사용량 정보 없음")
+            weekRow.update(percent: nil, subtitle: "사용량 정보 없음")
             statusItem.button?.toolTip = "사용량 정보 없음 (Pro/Max 구독 및 statusline 설정을 확인하세요)"
             return
         }
-        let sessionText = String(format: "세션(5시간): %.0f%%", session)
-        let weekText = String(format: "주간(7일): %.0f%%", week)
-        sessionMenuItem.title = sessionText
-        weekMenuItem.title = weekText
-        updatedMenuItem.title = "갱신: \(formattedTime(updatedAt))"
-        statusItem.button?.toolTip = "\(sessionText)\n\(weekText)"
+        let sessionReset = relativeReset(sessionResetsAt)
+        let weekReset = weekdayReset(weekResetsAt)
+        sessionRow.update(percent: session, subtitle: sessionReset)
+        weekRow.update(percent: week, subtitle: weekReset)
+        statusItem.button?.toolTip = String(format: "현재 세션: %.0f%% · %@\n주간 한도: %.0f%% · %@", session, sessionReset, week, weekReset)
     }
 
     /// Draws the button from lastSession/lastWeek according to the current mode.
@@ -300,11 +420,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func formattedTime(_ epochSeconds: Double?) -> String {
+    /// Session reset is always within 5 hours, so a relative countdown ("22분 후 재설정")
+    /// reads better than a clock time -- matches Claude's own usage UI.
+    private func relativeReset(_ epochSeconds: Double?) -> String {
+        guard let epochSeconds else { return "-" }
+        let totalMinutes = Int((epochSeconds - Date().timeIntervalSince1970) / 60)
+        if totalMinutes <= 0 { return "곧 재설정" }
+        if totalMinutes < 60 { return "\(totalMinutes)분 후 재설정" }
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        return minutes == 0 ? "\(hours)시간 후 재설정" : "\(hours)시간 \(minutes)분 후 재설정"
+    }
+
+    /// Weekly reset can land days out, so a weekday + time reads better than a countdown --
+    /// e.g. "(수) 오전 7:00에 재설정", matching Claude's own usage UI.
+    private func weekdayReset(_ epochSeconds: Double?) -> String {
         guard let epochSeconds else { return "-" }
         let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        return formatter.string(from: Date(timeIntervalSince1970: epochSeconds))
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "(EEE) a h:mm"
+        return formatter.string(from: Date(timeIntervalSince1970: epochSeconds)) + "에 재설정"
     }
 }
 
