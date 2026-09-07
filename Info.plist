@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>ClaudeUsage</string>
+    <string>Clife</string>
     <key>CFBundleDisplayName</key>
     <string>Usage Monitor for Claude Code</string>
     <key>CFBundleIdentifier</key>
-    <string>com.example.claude-usage-bar</string>
+    <string>com.example.clife</string>
     <key>CFBundleVersion</key>
     <string>1.0</string>
     <key>CFBundleShortVersionString</key>
     <string>1.0</string>
     <key>CFBundleExecutable</key>
-    <string>ClaudeUsage</string>
+    <string>Clife</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>

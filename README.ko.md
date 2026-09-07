@@ -1,4 +1,4 @@
-# claude-usage-bar
+# clife
 
 [English](README.md)
 
@@ -19,8 +19,8 @@ Claude Code는 프롬프트를 렌더링할 때마다 `~/.claude/statusline.sh`�
 ## 설치
 
 ```sh
-git clone <this-repo> claude-usage-bar
-cd claude-usage-bar
+git clone <this-repo> clife
+cd clife
 ./setup.sh
 ```
 
@@ -36,13 +36,13 @@ cd claude-usage-bar
 `/Applications`에 수동으로 설치/재설치하려면(예: `./build.sh`만 따로 돌린 뒤):
 
 ```sh
-pkill -f ClaudeUsage.app/Contents/MacOS/ClaudeUsage 2>/dev/null
-rm -r -f /Applications/ClaudeUsage.app
-ditto ClaudeUsage.app /Applications/ClaudeUsage.app   # cp -R 말고, 이유는 아래
-open /Applications/ClaudeUsage.app
+pkill -f Clife.app/Contents/MacOS/Clife 2>/dev/null
+rm -r -f /Applications/Clife.app
+ditto Clife.app /Applications/Clife.app   # cp -R 말고, 이유는 아래
+open /Applications/Clife.app
 ```
 
-여기서 `cp -R`은 쓰지 마라 — `/Applications/ClaudeUsage.app`이 이미 있으면 그 안으로 중첩 복사가 돼서, 껍데기만 바뀐 것처럼 보이고 실제로는 업데이트가 하나도 안 된다. 직접 겪어봤다. `ditto`는 어떤 상황이든 제대로 처리한다.
+여기서 `cp -R`은 쓰지 마라 — `/Applications/Clife.app`이 이미 있으면 그 안으로 중첩 복사가 돼서, 껍데기만 바뀐 것처럼 보이고 실제로는 업데이트가 하나도 안 된다. 직접 겪어봤다. `ditto`는 어떤 상황이든 제대로 처리한다.
 
 ### Gatekeeper 경고
 
@@ -51,11 +51,11 @@ open /Applications/ClaudeUsage.app
 ## 제거
 
 ```sh
-pkill -f ClaudeUsage.app/Contents/MacOS/ClaudeUsage
-rm -r -f /Applications/ClaudeUsage.app
+pkill -f Clife.app/Contents/MacOS/Clife
+rm -r -f /Applications/Clife.app
 ```
 
-완전히 지우고 싶으면 `~/.claude/statusline.sh`에서 스니펫 블록(`# >>> claude-usage-bar`와 `# <<< claude-usage-bar` 사이)을 지우고, `~/.claude/usage-status.json`도 삭제하면 된다.
+완전히 지우고 싶으면 `~/.claude/statusline.sh`에서 스니펫 블록(`# >>> clife`와 `# <<< clife` 사이)을 지우고, `~/.claude/usage-status.json`도 삭제하면 된다.
 
 ## 표시 방식
 

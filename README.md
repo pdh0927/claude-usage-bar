@@ -1,4 +1,4 @@
-# claude-usage-bar
+# clife
 
 [한국어](README.ko.md)
 
@@ -36,8 +36,8 @@ changes. No polling, no timers ticking in the background for no reason.
 ## Install
 
 ```sh
-git clone <this-repo> claude-usage-bar
-cd claude-usage-bar
+git clone <this-repo> clife
+cd clife
 ./setup.sh
 ```
 
@@ -63,13 +63,13 @@ If you want to install/reinstall into `/Applications` by hand (say, after
 running `./build.sh` on its own):
 
 ```sh
-pkill -f ClaudeUsage.app/Contents/MacOS/ClaudeUsage 2>/dev/null
-rm -r -f /Applications/ClaudeUsage.app
-ditto ClaudeUsage.app /Applications/ClaudeUsage.app   # not cp -R, see below
-open /Applications/ClaudeUsage.app
+pkill -f Clife.app/Contents/MacOS/Clife 2>/dev/null
+rm -r -f /Applications/Clife.app
+ditto Clife.app /Applications/Clife.app   # not cp -R, see below
+open /Applications/Clife.app
 ```
 
-Don't use `cp -R` here — if `/Applications/ClaudeUsage.app` already exists,
+Don't use `cp -R` here — if `/Applications/Clife.app` already exists,
 it copies *into* it instead of replacing it, and you end up with a
 nested app bundle that never actually updates. Ask me how I know. `ditto`
 just does the right thing either way.
@@ -85,13 +85,13 @@ launch normally from then on, login items included.
 ## Uninstall
 
 ```sh
-pkill -f ClaudeUsage.app/Contents/MacOS/ClaudeUsage
-rm -r -f /Applications/ClaudeUsage.app
+pkill -f Clife.app/Contents/MacOS/Clife
+rm -r -f /Applications/Clife.app
 ```
 
 Then, if you want to fully clean up, delete the snippet block from
-`~/.claude/statusline.sh` (it's between `# >>> claude-usage-bar` and
-`# <<< claude-usage-bar`) and remove `~/.claude/usage-status.json`.
+`~/.claude/statusline.sh` (it's between `# >>> clife` and
+`# <<< clife`) and remove `~/.claude/usage-status.json`.
 
 ## Display mode
 

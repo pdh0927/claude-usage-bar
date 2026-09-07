@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds ClaudeUsage.app from source.
+# Builds Clife.app from source.
 # Signs locally with a free "Apple Development" certificate if Xcode has one set
 # up on this Mac (Xcode > Settings > Accounts); if not, falls back to ad-hoc
 # signing ("-"), which needs no certificate at all. Either way the result is
@@ -9,7 +9,7 @@
 set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-APP="$DIR/ClaudeUsage.app"
+APP="$DIR/Clife.app"
 
 if [ -n "$SIGN_IDENTITY" ]; then
   : # explicit override from the environment
@@ -25,7 +25,7 @@ cp "$DIR/Info.plist" "$APP/Contents/Info.plist"
 cp "$DIR/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
 swiftc -O \
-  -o "$APP/Contents/MacOS/ClaudeUsage" \
+  -o "$APP/Contents/MacOS/Clife" \
   "$DIR/src/main.swift"
 
 codesign --force --deep --sign "$SIGN_IDENTITY" "$APP"

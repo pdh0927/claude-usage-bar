@@ -10,18 +10,18 @@ cd "$DIR"
 ./install.sh
 ./build.sh
 
-pkill -f "ClaudeUsage.app/Contents/MacOS/ClaudeUsage" 2>/dev/null || true
+pkill -f "Clife.app/Contents/MacOS/Clife" 2>/dev/null || true
 sleep 1
-rm -r -f /Applications/ClaudeUsage.app
-ditto ClaudeUsage.app /Applications/ClaudeUsage.app
-open /Applications/ClaudeUsage.app
+rm -r -f /Applications/Clife.app
+ditto Clife.app /Applications/Clife.app
+open /Applications/Clife.app
 
 cat <<'EOF'
 
-Installed to /Applications/ClaudeUsage.app and launched.
+Installed to /Applications/Clife.app and launched.
 
 If macOS blocked the launch with an "unidentified developer" warning:
-Right-click ClaudeUsage.app in /Applications > Open > Open, once.
+Right-click Clife.app in /Applications > Open > Open, once.
 
 Usage numbers only appear for Pro/Max accounts, and only after Claude Code's
 first response in a session writes rate_limits into the hook JSON.

@@ -11,7 +11,7 @@ CLAUDE_DIR="$HOME/.claude"
 STATUSLINE="$CLAUDE_DIR/statusline.sh"
 SETTINGS="$CLAUDE_DIR/settings.json"
 SNIPPET_FILE="$DIR/statusline-snippet.sh"
-MARKER="# >>> claude-usage-bar: write rate-limit usage snapshot >>>"
+MARKER="# >>> clife: write rate-limit usage snapshot >>>"
 
 mkdir -p "$CLAUDE_DIR"
 [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
@@ -71,9 +71,9 @@ fi
 cat <<'EOF'
 
 Done. Next:
-  1. ./build.sh              # builds ClaudeUsage.app
-  2. ./install.sh doesn't install the app itself -- copy/ditto ClaudeUsage.app
-     to /Applications and open it, or just `open ClaudeUsage.app` in place.
+  1. ./build.sh              # builds Clife.app
+  2. ./install.sh doesn't install the app itself -- copy/ditto Clife.app
+     to /Applications and open it, or just `open Clife.app` in place.
   3. Usage numbers only appear for Pro/Max accounts, and only after Claude
      Code's first response in a session writes rate_limits into the hook JSON.
 EOF

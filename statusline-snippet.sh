@@ -9,6 +9,6 @@
 # leaves the fields absent from the JSON, and the menu bar app shows "no data".
 #
 # Written via temp-file-then-mv so the app never reads a half-written file.
-# >>> claude-usage-bar: write rate-limit usage snapshot >>>
+# >>> clife: write rate-limit usage snapshot >>>
 echo "$input" | jq -c '{five_hour: .rate_limits.five_hour.used_percentage, seven_day: .rate_limits.seven_day.used_percentage, five_hour_resets_at: .rate_limits.five_hour.resets_at, seven_day_resets_at: .rate_limits.seven_day.resets_at, updated_at: now}' > ~/.claude/usage-status.json.tmp 2>/dev/null && mv ~/.claude/usage-status.json.tmp ~/.claude/usage-status.json
-# <<< claude-usage-bar <<<
+# <<< clife <<<
