@@ -421,6 +421,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 statusItem.button?.image = nil
                 statusItem.button?.title = "Claude: -"
             }
+            statusItem.button?.needsDisplay = true
             return
         }
         switch displayMode {
@@ -431,6 +432,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem.button?.image = nil
             statusItem.button?.title = String(format: "%.0f%%/%.0f%%", session, week)
         }
+        // Assigning a new image/title doesn't always trigger a repaint on its own --
+        // e.g. after the display wakes from sleep, AppKit has been seen to skip
+        // redrawing an NSStatusItem's button until something else forces it (like
+        // opening the menu). Force it explicitly so the icon can't visibly go stale
+        // while the underlying data (checkable via the tooltip/dropdown) is fine.
+        statusItem.button?.needsDisplay = true
     }
 
     /// Session reset is always within 5 hours, so a relative countdown ("22분 후 재설정")
