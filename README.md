@@ -1,5 +1,7 @@
 # claude-usage-bar
 
+[한국어](README.ko.md)
+
 A little macOS menu bar app that shows your Claude Code usage limits — current
 session and weekly — as a small ring gauge, so you don't have to guess when
 you're about to get rate-limited.
