@@ -308,6 +308,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let watcher = StatusFileWatcher(watchedFilePath: statusFilePath) { [weak self] in self?.reload() }
         watcher.start()
         self.watcher = watcher
+
+        // A kqueue watch held across system sleep can come back dead on wake even
+        // though the process itself survives -- the menu bar then freezes on
+        // whatever it last showed before sleep, silently. Re-arming the watch (it
+        // reopens the directory fd) and reloading immediately on wake is cheap
+        // insurance against that, whatever the exact cause turns out to be.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.watcher?.start()
+            self.reload()
+        }
     }
 
     @objc private func refresh() {
