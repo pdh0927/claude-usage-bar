@@ -1,4 +1,5 @@
 import Cocoa
+import UserNotifications
 
 // MARK: - Data
 
@@ -262,7 +263,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastSessionResetsAt: Double?
     private var lastWeekResetsAt: Double?
 
+    // Desktop-notification thresholds. Each one fires at most once per window;
+    // firedSession/WeekThresholds resets whenever that window's resets_at changes
+    // (i.e. a new 5-hour/7-day window started), so the same crossing can notify
+    // again next window instead of being permanently spent.
+    private static let notifyThresholds: [Double] = [25, 50, 70]
+    private var firedSessionThresholds = Set<Double>()
+    private var firedWeekThresholds = Set<Double>()
+    private var hasSeenFirstLoad = false
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+
         if let saved = UserDefaults.standard.string(forKey: Self.displayModeDefaultsKey),
            let mode = DisplayMode(rawValue: saved) {
             displayMode = mode
@@ -387,12 +399,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        // Must run before lastSessionResetsAt/lastWeekResetsAt are overwritten below --
+        // it compares the new resets_at against those to detect a window rollover.
+        checkThresholds(session: session, week: week, sessionResetsAt: sessionResetsAt, weekResetsAt: weekResetsAt)
+
         lastSession = session
         lastWeek = week
         lastSessionResetsAt = sessionResetsAt
         lastWeekResetsAt = weekResetsAt
         updateDetails(session: session, week: week, sessionResetsAt: sessionResetsAt, weekResetsAt: weekResetsAt)
         render()
+    }
+
+    /// Fires a local notification the first time session/week usage reaches each of
+    /// notifyThresholds within its current window. On the very first load, thresholds
+    /// already passed are marked fired without notifying -- otherwise launching the
+    /// app mid-window at, say, 80% would immediately fire all three at once.
+    private func checkThresholds(session: Double, week: Double, sessionResetsAt: Double?, weekResetsAt: Double?) {
+        if !hasSeenFirstLoad {
+            hasSeenFirstLoad = true
+            firedSessionThresholds = Set(Self.notifyThresholds.filter { session >= $0 })
+            firedWeekThresholds = Set(Self.notifyThresholds.filter { week >= $0 })
+            return
+        }
+
+        // A changed resets_at means a new window started -- let thresholds fire again.
+        if sessionResetsAt != lastSessionResetsAt { firedSessionThresholds.removeAll() }
+        if weekResetsAt != lastWeekResetsAt { firedWeekThresholds.removeAll() }
+
+        for t in Self.notifyThresholds where session >= t && !firedSessionThresholds.contains(t) {
+            firedSessionThresholds.insert(t)
+            notify(title: "현재 세션 사용량 \(Int(t))%", body: relativeReset(sessionResetsAt))
+        }
+        for t in Self.notifyThresholds where week >= t && !firedWeekThresholds.contains(t) {
+            firedWeekThresholds.insert(t)
+            notify(title: "주간 한도 사용량 \(Int(t))%", body: weekdayReset(weekResetsAt))
+        }
+    }
+
+    private func notify(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 
     /// Tooltip and dropdown rows always show real numbers, independent of display mode.
