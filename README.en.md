@@ -22,6 +22,16 @@ session. If you're on another plan, or haven't sent a message yet, you'll
 just see a "no data" icon — that's expected, not broken. Anthropic's own docs
 cover this under "Rate limit usage": https://code.claude.com/docs/en/statusline.md
 
+**Only updates during interactive sessions.** The statusLine hook only fires
+in an interactive Claude Code session (one that renders a terminal UI). A
+cron/background job run via `claude -p` does hit the API and does count
+against your usage, but never triggers statusLine, so this app never finds
+out about it (`-p --output-format json`'s result has no `rate_limits` field
+either — there's no way around this from the CLI). So if you run a lot of
+background Claude Code jobs, this app can read a bit lower than what
+claude.ai's account page shows — it catches up the moment you open an
+interactive session again.
+
 ## How it works
 
 Claude Code calls `~/.claude/statusline.sh` every time it renders a prompt,

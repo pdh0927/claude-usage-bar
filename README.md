@@ -10,6 +10,8 @@ Claude Code 사용량 한도(현재 세션, 주간)를 작은 링 게이지로 �
 
 **Claude Code Pro나 Max 구독이 있어야 뭔가 보인다.** 이 앱이 읽는 값(`rate_limits.five_hour.used_percentage`, `rate_limits.seven_day.used_percentage`)은 Pro/Max 계정에서, 그것도 세션에서 Claude Code가 첫 응답을 하고 난 뒤부터만 statusLine 훅 JSON에 들어있다. 다른 플랜이거나 아직 메시지를 안 보냈으면 "데이터 없음" 아이콘만 뜬다 — 고장난 게 아니라 원래 그런 거다. Anthropic 문서의 "Rate limit usage" 항목 참고: https://code.claude.com/docs/en/statusline.md
 
+**인터랙티브 세션에서만 갱신된다.** statusLine 훅은 대화형 Claude Code 세션(터미널 UI를 그리는 세션)에서만 호출된다. `claude -p`로 돌리는 크론/백그라운드 작업은 실제로 API를 써서 계정 사용량은 올라가지만, statusLine 자체가 안 불려서 이 앱은 그 소비를 전혀 모른다 (`-p --output-format json`의 결과 JSON에도 `rate_limits`가 없다 — CLI 어디서도 우회할 방법이 없다). 그래서 백그라운드 작업을 많이 쓰는 계정이라면, claude.ai 계정 페이지의 실제 값보다 이 앱이 다소 낮게 보일 수 있다 — 인터랙티브 세션을 다시 열면 그 순간 최신값으로 따라잡힌다.
+
 ## 동작 원리
 
 Claude Code는 프롬프트를 렌더링할 때마다 `~/.claude/statusline.sh`를 호출하면서 현재 사용량이 담긴 JSON을 넘겨준다(Pro/Max라면). 여기에 한 줄 추가해서 그 두 퍼센트 값을 뽑아 `~/.claude/usage-status.json`에 써넣는다 — 임시 파일에 쓰고 `mv`로 옮기는 방식이라(원자적 쓰기), 앱이 파일을 읽다가 절반만 쓰인 걸 보는 일은 없다.
