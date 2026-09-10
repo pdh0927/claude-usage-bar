@@ -461,34 +461,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.toolTip = String(format: "현재 세션: %.0f%% · %@\n주간 한도: %.0f%% · %@", session, sessionReset, week, weekReset)
     }
 
+    /// Sets the button's image via a nil-then-set toggle instead of a direct
+    /// assignment. Assigning a new NSImage directly (even a distinct instance)
+    /// has been observed to leave AppKit showing the previous bitmap -- clearing
+    /// it first forces a real add/remove transition instead of an in-place swap
+    /// AppKit might coalesce away.
+    private func setIcon(_ image: NSImage?) {
+        statusItem.button?.image = nil
+        statusItem.button?.image = image
+    }
+
     /// Draws the button from lastSession/lastWeek according to the current mode.
     private func render() {
         guard let session = lastSession, let week = lastWeek else {
-            switch displayMode {
-            case .icon:
-                statusItem.button?.image = IconFactory.unknownIcon()
-                statusItem.button?.title = ""
-            case .text:
-                statusItem.button?.image = nil
-                statusItem.button?.title = "Claude: -"
-            }
+            setIcon(IconFactory.unknownIcon())
+            statusItem.button?.title = ""
             statusItem.button?.needsDisplay = true
             return
         }
         switch displayMode {
         case .icon:
-            statusItem.button?.image = IconFactory.dualRingIcon(session: session, week: week)
+            setIcon(IconFactory.dualRingIcon(session: session, week: week))
             statusItem.button?.title = ""
         case .text:
-            statusItem.button?.image = nil
+            setIcon(nil)
             statusItem.button?.title = String(format: "%.0f%%/%.0f%%", session, week)
         }
         // Assigning a new image/title doesn't always trigger a repaint on its own --
-        // e.g. after the display wakes from sleep, AppKit has been seen to skip
-        // redrawing an NSStatusItem's button until something else forces it (like
-        // opening the menu). Force it explicitly so the icon can't visibly go stale
-        // while the underlying data (checkable via the tooltip/dropdown) is fine.
+        // e.g. after the display wakes from sleep, or the display configuration
+        // changes (external monitor connect/disconnect), AppKit has been seen to
+        // keep showing the previous bitmap indefinitely, surviving even an explicit
+        // needsDisplay and a manual refresh. Force it explicitly so the icon can't
+        // visibly go stale while the underlying data (checkable via the tooltip/
+        // dropdown) is fine. Belt and suspenders: the view-level flag plus a
+        // direct layer invalidation, since the button is layer-backed and a
+        // stuck backing-store layer is exactly what display/config changes cause.
         statusItem.button?.needsDisplay = true
+        statusItem.button?.layer?.setNeedsDisplay()
     }
 
     /// Session reset is always within 5 hours, so a relative countdown ("22분 후 재설정")
